@@ -7,7 +7,8 @@ import {
   CloudOff, 
   CheckCircle2, 
   Flame,
-  Calendar
+  Calendar,
+  RefreshCw
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -17,6 +18,8 @@ export default function Navbar({
   onResetDay, 
   onOpenNewTask, 
   onOpenSettings,
+  onQuickSync,
+  isSyncing,
   isSynced 
 }) {
   const todayFormatted = new Intl.DateTimeFormat('es-CO', { 
@@ -92,6 +95,18 @@ export default function Navbar({
                 ({dailyStats.percent}%)
               </span>
             </div>
+
+            {/* Quick Sync Button */}
+            {isSynced && (
+              <button
+                onClick={onQuickSync}
+                disabled={isSyncing}
+                title="Sincronizar cambios ahora"
+                className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-purple-300 hover:text-white transition-all"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-purple-400' : ''}`} />
+              </button>
+            )}
 
             {/* Reset Day Button */}
             <button

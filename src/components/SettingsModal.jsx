@@ -10,9 +10,18 @@ import {
   AlertCircle,
   ExternalLink,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  RefreshCw,
+  ArrowUpCircle,
+  ArrowDownCircle
 } from 'lucide-react';
-import { getCredentials, saveCredentials, isSupabaseConnected, DataService } from '../lib/supabase';
+import { 
+  getCredentials, 
+  saveCredentials, 
+  isSupabaseConnected, 
+  testSupabaseConnection, 
+  DataService 
+} from '../lib/supabase';
 
 export default function SettingsModal({ 
   isOpen, 
@@ -24,6 +33,7 @@ export default function SettingsModal({
   const [key, setKey] = useState(currentCreds.key);
   const [statusMessage, setStatusMessage] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   if (!isOpen) return null;
 
@@ -33,19 +43,71 @@ export default function SettingsModal({
     setStatusMessage(null);
 
     try {
-      saveCredentials(url, key);
       if (url && key) {
-        // Test fetch
-        await DataService.getTasks();
-        setStatusMessage({ type: 'success', text: '¡Conexión a Supabase configurada con éxito!' });
+        // Test real connection
+        await testSupabaseConnection(url, key);
+        saveCredentials(url, key);
+        setStatusMessage({ 
+          type: 'success', 
+          text: '¡Conexión exitosa a Supabase! Ya puedes sincronizar tus datos.' 
+        });
       } else {
-        setStatusMessage({ type: 'info', text: 'Credenciales borradas. Usando almacenamiento Local.' });
+        saveCredentials('', '');
+        setStatusMessage({ 
+          type: 'info', 
+          text: 'Credenciales borradas. Usando almacenamiento Local.' 
+        });
       }
-      if (onDataReload) onDataReload();
+      if (onDataReload) await onDataReload();
     } catch (err) {
-      setStatusMessage({ type: 'error', text: 'Error al conectar con Supabase: ' + err.message });
+      console.error(err);
+      saveCredentials(url, key); // save anyway so user doesn't lose what they typed
+      setStatusMessage({ 
+        type: 'error', 
+        text: `Error de conexión: ${err.message}. Asegúrate de haber ejecutado el script SQL en Supabase.` 
+      });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleUploadToCloud = async () => {
+    setIsSyncing(true);
+    setStatusMessage(null);
+    try {
+      await DataService.uploadAllLocalToCloud();
+      setStatusMessage({ 
+        type: 'success', 
+        text: '¡Datos de este dispositivo subidos a Supabase con éxito!' 
+      });
+      if (onDataReload) await onDataReload();
+    } catch (err) {
+      setStatusMessage({ 
+        type: 'error', 
+        text: 'Error subiendo datos: ' + err.message 
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDownloadFromCloud = async () => {
+    setIsSyncing(true);
+    setStatusMessage(null);
+    try {
+      await DataService.downloadAllCloudToLocal();
+      setStatusMessage({ 
+        type: 'success', 
+        text: '¡Datos descargados desde Supabase a este dispositivo!' 
+      });
+      if (onDataReload) await onDataReload();
+    } catch (err) {
+      setStatusMessage({ 
+        type: 'error', 
+        text: 'Error descargando datos: ' + err.message 
+      });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -83,7 +145,7 @@ export default function SettingsModal({
         if (parsed.goals) await DataService.saveGoals(parsed.goals);
         if (parsed.projects) await DataService.saveProjects(parsed.projects);
         setStatusMessage({ type: 'success', text: '¡Copia de seguridad restaurada correctamente!' });
-        if (onDataReload) onDataReload();
+        if (onDataReload) await onDataReload();
       } catch (err) {
         setStatusMessage({ type: 'error', text: 'Archivo de respaldo inválido.' });
       }
@@ -95,7 +157,7 @@ export default function SettingsModal({
     if (window.confirm('¿Deseas restablecer todos los hábitos, metas y proyectos a los datos iniciales?')) {
       await DataService.resetToDefaults();
       setStatusMessage({ type: 'success', text: 'Restablecido a los datos iniciales.' });
-      if (onDataReload) onDataReload();
+      if (onDataReload) await onDataReload();
     }
   };
 
@@ -116,13 +178,13 @@ export default function SettingsModal({
             <Cloud className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Sincronización & Ajustes</h2>
-            <p className="text-xs text-slate-400">Conecta tu cuenta de Supabase y respalda tu información</p>
+            <h2 className="text-xl font-bold text-white">Sincronización & Base de Datos</h2>
+            <p className="text-xs text-slate-400">Conecta Supabase para ver los mismos datos en PC y celular</p>
           </div>
         </div>
 
         {statusMessage && (
-          <div className={`mb-4 p-3 rounded-xl text-xs flex items-center gap-2 ${
+          <div className={`mb-4 p-3.5 rounded-xl text-xs flex items-start gap-2.5 leading-relaxed ${
             statusMessage.type === 'success' 
               ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30'
               : statusMessage.type === 'error'
@@ -130,9 +192,9 @@ export default function SettingsModal({
               : 'bg-purple-500/10 text-purple-300 border border-purple-500/30'
           }`}>
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="w-4 h-4 text-amber-400" />
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             )}
             <span>{statusMessage.text}</span>
           </div>
@@ -142,7 +204,7 @@ export default function SettingsModal({
         <form onSubmit={handleSaveCredentials} className="space-y-4 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
             <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-              <Database className="w-4 h-4 text-purple-400" /> Conexión Supabase
+              <Database className="w-4 h-4 text-purple-400" /> Claves de Supabase
             </span>
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
               connected 
@@ -159,7 +221,7 @@ export default function SettingsModal({
             </label>
             <input
               type="text"
-              placeholder="https://xxxxxxxx.supabase.co"
+              placeholder="https://qtynomsgpnncqpxssvjn.supabase.co"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-purple-500"
@@ -167,37 +229,83 @@ export default function SettingsModal({
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1">
-              Anon / Public API Key
-            </label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-xs font-medium text-slate-400">
+                Anon / Public API Key
+              </label>
+              <span className="text-[10px] text-purple-400">
+                (Usa la clave `anon` de "View legacy API keys" o tu `sb_publishable_...`)
+              </span>
+            </div>
             <input
               type="password"
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+              placeholder="Pega tu clave pública aquí..."
               value={key}
               onChange={(e) => setKey(e.target.value)}
               className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs font-mono focus:outline-none focus:border-purple-500"
             />
           </div>
 
-          <div className="flex items-center justify-between pt-1">
-            <p className="text-[11px] text-slate-500">
-              Usa el archivo <span className="text-purple-400 font-mono">supabase_schema.sql</span> incluido para crear las tablas en Supabase.
-            </p>
+          <div className="flex items-center justify-end pt-1">
             <button
               type="submit"
               disabled={isSaving}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-purple-600/20"
             >
               <Check className="w-3.5 h-3.5" />
-              <span>{isSaving ? 'Guardando...' : 'Guardar y Probar'}</span>
+              <span>{isSaving ? 'Verificando...' : 'Guardar y Probar Conexión'}</span>
             </button>
           </div>
         </form>
 
+        {/* Sync Controls (Upload / Download) */}
+        {connected && (
+          <div className="mt-4 p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5 text-purple-400" /> Sincronización Manual Inmediata
+              </span>
+              <span className="text-[10px] text-slate-400">Entre tus dispositivos</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={handleUploadToCloud}
+                disabled={isSyncing}
+                className="p-2.5 rounded-lg bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-left transition-all"
+              >
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                  <ArrowUpCircle className="w-4 h-4 text-purple-300" />
+                  <span>Subir a Supabase</span>
+                </div>
+                <p className="text-[10px] text-slate-300 mt-0.5">
+                  Envía el progreso de este equipo a la nube
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadFromCloud}
+                disabled={isSyncing}
+                className="p-2.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-left transition-all"
+              >
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-white">
+                  <ArrowDownCircle className="w-4 h-4 text-emerald-400" />
+                  <span>Descargar de Supabase</span>
+                </div>
+                <p className="text-[10px] text-slate-300 mt-0.5">
+                  Trae lo último actualizado desde otro equipo
+                </p>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Backup & Recovery Section */}
         <div className="mt-5 space-y-3">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-            Copias de Seguridad & Restauración
+            Copias de Seguridad en Archivo JSON
           </span>
 
           <div className="grid grid-cols-2 gap-3">

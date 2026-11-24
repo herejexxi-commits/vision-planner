@@ -18,6 +18,7 @@ export default function App() {
   const [goals, setGoals] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Modals state
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -55,6 +56,22 @@ export default function App() {
   useEffect(() => {
     loadAllData();
   }, []);
+
+  // Quick Sync Handler
+  const handleQuickSync = async () => {
+    setIsSyncing(true);
+    try {
+      const downloaded = await DataService.downloadAllCloudToLocal();
+      if (downloaded.tasks && downloaded.tasks.length > 0) setTasks(downloaded.tasks);
+      if (downloaded.goals && downloaded.goals.length > 0) setGoals(downloaded.goals);
+      if (downloaded.projects && downloaded.projects.length > 0) setProjects(downloaded.projects);
+      setIsSynced(isSupabaseConnected());
+    } catch (err) {
+      console.error('Error sincronizando:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Daily statistics
   const dailyTasks = tasks.filter(t => t.type === 'daily');
@@ -191,6 +208,8 @@ export default function App() {
         onResetDay={handleResetDay}
         onOpenNewTask={handleOpenNewTask}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onQuickSync={handleQuickSync}
+        isSyncing={isSyncing}
         isSynced={isSynced}
       />
 
