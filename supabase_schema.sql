@@ -3,12 +3,12 @@
 -- Copia y ejecuta este script completo en el SQL Editor de Supabase
 -- ==========================================================
 
--- 1. Eliminar tablas previas si tenían incompatibilidad de tipos (id UUID)
+-- 1. Eliminar tablas previas si existían
 DROP TABLE IF EXISTS tasks CASCADE;
 DROP TABLE IF EXISTS goals CASCADE;
 DROP TABLE IF EXISTS tattoo_projects CASCADE;
 
--- 2. TABLA DE TAREAS Y RUTINAS DIARIAS (ID como TEXT para compatibilidad total)
+-- 2. TABLA DE TAREAS Y RUTINAS DIARIAS
 CREATE TABLE tasks (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -60,7 +60,13 @@ CREATE TABLE tattoo_projects (
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 5. POLÍTICAS RLS (Row Level Security)
+-- 5. PERMISOS DE TABLA PARA ROLES ANON Y AUTHENTICATED (CLAVE PARA RESOLVER 'permission denied')
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT ALL ON TABLE tasks TO anon, authenticated;
+GRANT ALL ON TABLE goals TO anon, authenticated;
+GRANT ALL ON TABLE tattoo_projects TO anon, authenticated;
+
+-- 6. POLÍTICAS RLS (Row Level Security)
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE goals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tattoo_projects ENABLE ROW LEVEL SECURITY;
@@ -69,7 +75,7 @@ CREATE POLICY "Permitir todo en tasks" ON tasks FOR ALL USING (true) WITH CHECK 
 CREATE POLICY "Permitir todo en goals" ON goals FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo en tattoo_projects" ON tattoo_projects FOR ALL USING (true) WITH CHECK (true);
 
--- 6. DATOS INICIALES (Borrador del usuario)
+-- 7. DATOS INICIALES (Borrador del usuario)
 INSERT INTO tasks (id, title, description, category, type, priority, frequency_note, sort_order) VALUES
 ('task-1', 'Organizar la casa', 'Mantener los espacios limpios y organizados para mayor claridad mental', 'casa', 'daily', 'alta', 'Todos los días', 1),
 ('task-2', 'Cocinar y comer saludable', 'Preparar comidas balanceadas y nutritivas', 'casa', 'daily', 'alta', 'Todos los días', 2),
